@@ -1,0 +1,6 @@
+{
+  "name": "Dasein Lab Layout Engine",
+  "description": "An ultra-premium, Swiss-inspired modular grid layout editor and realistic 3D paper flipbook portfolio tool.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
