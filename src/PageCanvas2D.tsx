@@ -64,7 +64,7 @@ function SpinnerModel({ src }: { src: string }) {
   );
 }
 
-function MiniModelCanvas({ src }: { src: string }) {
+export function MiniModelCanvas({ src }: { src: string }) {
   return (
     <div className="w-full h-full relative cursor-pointer flex items-center justify-center bg-transparent">
       <Canvas
@@ -81,6 +81,51 @@ function MiniModelCanvas({ src }: { src: string }) {
   );
 }
 
+// Dynamic style and class resolution for typography
+export const getTypographyClasses = (item: PageItem) => {
+  const fontFamilyClass = item.fontFamily === 'sans' ? 'font-sans' 
+                        : item.fontFamily === 'serif' ? 'font-serif'
+                        : item.fontFamily === 'mono' ? 'font-mono'
+                        : ((item.fontSize || 0) > 0.04 ? 'font-sans' : 'font-serif');
+
+  const fontWeightClass = item.fontWeight === 'light' ? 'font-light'
+                        : item.fontWeight === 'normal' ? 'font-normal'
+                        : item.fontWeight === 'semibold' ? 'font-semibold'
+                        : item.fontWeight === 'bold' ? 'font-bold'
+                        : item.fontWeight === 'extrabold' ? 'font-extrabold'
+                        : ((item.fontSize || 0) > 0.04 ? 'font-extrabold' : 'font-medium');
+
+  const alignmentClass = item.alignment === 'left' ? 'text-left'
+                       : item.alignment === 'center' ? 'text-center'
+                       : item.alignment === 'right' ? 'text-right'
+                       : item.alignment === 'justify' ? 'text-justify'
+                       : 'text-left';
+
+  const trackingClass = item.letterSpacing === 'tighter' ? 'tracking-tighter'
+                      : item.letterSpacing === 'tight' ? 'tracking-tight'
+                      : item.letterSpacing === 'normal' ? 'tracking-normal'
+                      : item.letterSpacing === 'wide' ? 'tracking-wide'
+                      : item.letterSpacing === 'widest' ? 'tracking-widest'
+                      : ((item.fontSize || 0) > 0.04 ? 'tracking-tighter' : 'tracking-normal');
+
+  const transformClass = item.uppercase ? 'uppercase' : 'normal-case';
+
+  // Flexbox alignments inside the item container box
+  const flexAlignClass = item.alignment === 'center' ? 'items-center justify-center text-center'
+                       : item.alignment === 'right' ? 'items-end justify-end text-right'
+                       : item.alignment === 'justify' ? 'items-stretch justify-start text-justify'
+                       : 'items-start justify-start text-left';
+
+  return {
+    fontFamilyClass,
+    fontWeightClass,
+    alignmentClass,
+    trackingClass,
+    transformClass,
+    flexAlignClass,
+  };
+};
+
 interface PageCanvas2DProps {
   pageIndex: number;
   page: Page;
@@ -93,7 +138,6 @@ export default function PageCanvas2D({ pageIndex, page, showGridLines }: PageCan
   const setSelectedItemId = useGridStore((state) => state.setSelectedItemId);
   const deleteItem = useGridStore((state) => state.deleteItem);
   const updateItemGridArea = useGridStore((state) => state.updateItemGridArea);
-  const updateItemNoSnapshot = useGridStore((state) => state.updateItemNoSnapshot);
   const setActivePageIndex = useGridStore((state) => state.setActivePageIndex);
 
   // Local state for inline text editing
@@ -109,51 +153,6 @@ export default function PageCanvas2D({ pageIndex, page, showGridLines }: PageCan
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
   const [dragCurrentCoords, setDragCurrentCoords] = useState<{ left: number; top: number } | null>(null);
-
-  // Dynamic style and class resolution for typography
-  const getTypographyClasses = (item: PageItem) => {
-    const fontFamilyClass = item.fontFamily === 'sans' ? 'font-sans' 
-                          : item.fontFamily === 'serif' ? 'font-serif'
-                          : item.fontFamily === 'mono' ? 'font-mono'
-                          : ((item.fontSize || 0) > 0.04 ? 'font-sans' : 'font-serif');
-
-    const fontWeightClass = item.fontWeight === 'light' ? 'font-light'
-                          : item.fontWeight === 'normal' ? 'font-normal'
-                          : item.fontWeight === 'semibold' ? 'font-semibold'
-                          : item.fontWeight === 'bold' ? 'font-bold'
-                          : item.fontWeight === 'extrabold' ? 'font-extrabold'
-                          : ((item.fontSize || 0) > 0.04 ? 'font-extrabold' : 'font-medium');
-
-    const alignmentClass = item.alignment === 'left' ? 'text-left'
-                         : item.alignment === 'center' ? 'text-center'
-                         : item.alignment === 'right' ? 'text-right'
-                         : item.alignment === 'justify' ? 'text-justify'
-                         : 'text-left';
-
-    const trackingClass = item.letterSpacing === 'tighter' ? 'tracking-tighter'
-                        : item.letterSpacing === 'tight' ? 'tracking-tight'
-                        : item.letterSpacing === 'normal' ? 'tracking-normal'
-                        : item.letterSpacing === 'wide' ? 'tracking-wide'
-                        : item.letterSpacing === 'widest' ? 'tracking-widest'
-                        : ((item.fontSize || 0) > 0.04 ? 'tracking-tighter' : 'tracking-normal');
-
-    const transformClass = item.uppercase ? 'uppercase' : 'normal-case';
-
-    // Flexbox alignments inside the item container box
-    const flexAlignClass = item.alignment === 'center' ? 'items-center justify-center text-center'
-                         : item.alignment === 'right' ? 'items-end justify-end text-right'
-                         : item.alignment === 'justify' ? 'items-stretch justify-start text-justify'
-                         : 'items-start justify-start text-left';
-
-    return {
-      fontFamilyClass,
-      fontWeightClass,
-      alignmentClass,
-      trackingClass,
-      transformClass,
-      flexAlignClass,
-    };
-  };
 
   // Local state for resizing existing item
   const [resizingItem, setResizingItem] = useState<{
@@ -620,7 +619,7 @@ export default function PageCanvas2D({ pageIndex, page, showGridLines }: PageCan
       )}
 
       {/* 4. Active Page Content Items */}
-      {page.items.map((item) => {
+      {page.items.filter(item => !item.spanSpread).map((item) => {
         const isSelected = selectedItemId === item.id;
         const isDragging = draggingItemId === item.id;
         const rect = getItemRect(item.gridArea);
@@ -699,8 +698,23 @@ export default function PageCanvas2D({ pageIndex, page, showGridLines }: PageCan
                         value={item.content || ''}
                         autoFocus
                         onBlur={() => setEditingTextId(null)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape' || (e.key === 'Enter' && !e.shiftKey)) {
+                            setEditingTextId(null);
+                          }
+                        }}
                         onChange={(e) => {
-                          updateItemNoSnapshot(pageIndex, item.id, { content: e.target.value });
+                          useGridStore.setState((state) => {
+                            const updatedPages = state.pages.map((p, idx) => {
+                              if (idx !== pageIndex) return p;
+                              const updatedItems = p.items.map((it) => {
+                                if (it.id !== item.id) return it;
+                                return { ...it, content: e.target.value };
+                              });
+                              return { ...p, items: updatedItems };
+                            });
+                            return { pages: updatedPages };
+                          });
                         }}
                         style={{
                           fontSize: `${(item.fontSize || 0.028) * 450}px`,
@@ -718,7 +732,8 @@ export default function PageCanvas2D({ pageIndex, page, showGridLines }: PageCan
                           lineHeight: item.lineHeight || 1.45,
                           whiteSpace: 'pre-line',
                         }}
-                        className={`${fontFamilyClass} ${fontWeightClass} ${trackingClass} ${transformClass} leading-relaxed`}
+                        className={`${fontFamilyClass} ${fontWeightClass} ${trackingClass} ${transformClass} leading-relaxed cursor-pointer`}
+                        title={isEditMode ? "Double click to edit text inline" : undefined}
                       >
                         {item.content}
                       </div>

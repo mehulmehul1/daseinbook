@@ -1,4 +1,3 @@
-import { DaseinFile } from './types';
 import { PageItem } from './types';
 
 export interface LocalAsset {
@@ -224,53 +223,4 @@ export async function savePageLayout(
       message: `GitHub Commit API failed: ${error?.message || 'Unknown network error'}`,
     };
   }
-}
-
-// ── Project-level persistence (Phase 1: localStorage + Blob export) ──
-
-const PROJECT_KEY = 'daseinbook_project';
-
-/** Save full project document to localStorage. */
-export function saveProjectToLocal(file: DaseinFile): void {
-  try {
-    localStorage.setItem(PROJECT_KEY, JSON.stringify(file));
-    console.log('Project saved to localStorage');
-  } catch (err) {
-    console.error('Failed to save project to localStorage', err);
-  }
-}
-
-/** Load full project document from localStorage. Returns null if none found. */
-export function loadProjectFromLocal(): DaseinFile | null {
-  try {
-    const raw = localStorage.getItem(PROJECT_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as DaseinFile;
-  } catch (err) {
-    console.error('Failed to load project from localStorage', err);
-    return null;
-  }
-}
-
-/** Export project as a downloadable .dasein Blob. */
-export function exportToBlob(file: DaseinFile): Blob {
-  return new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' });
-}
-
-/** Parse a .dasein file from string or ArrayBuffer. */
-export function parseImport(data: string | ArrayBuffer): DaseinFile | null {
-  try {
-    const text = typeof data === 'string' ? data : new TextDecoder().decode(data);
-    const parsed = JSON.parse(text) as DaseinFile;
-    if (!parsed.version || !parsed.document) throw new Error('Invalid .dasein file');
-    return parsed;
-  } catch (err) {
-    console.error('Failed to parse .dasein file', err);
-    return null;
-  }
-}
-
-/** Check if a saved project exists in localStorage. */
-export function hasLocalProject(): boolean {
-  return localStorage.getItem(PROJECT_KEY) !== null;
 }

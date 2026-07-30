@@ -1,1 +1,16 @@
 @import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Nanum+Pen+Script&family=Architects+Daughter&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono&display=swap');
+
+.font-handwritten {
+  font-family: 'Nanum Pen Script', 'Caveat', cursive, sans-serif;
+}
+
+.font-marker {
+  font-family: 'Architects Daughter', 'Caveat', cursive, sans-serif;
+}
+
+.font-caveat {
+  font-family: 'Caveat', cursive, sans-serif;
+}
+
