@@ -93,6 +93,7 @@ export default function PageCanvas2D({ pageIndex, page, showGridLines }: PageCan
   const setSelectedItemId = useGridStore((state) => state.setSelectedItemId);
   const deleteItem = useGridStore((state) => state.deleteItem);
   const updateItemGridArea = useGridStore((state) => state.updateItemGridArea);
+  const updateItemNoSnapshot = useGridStore((state) => state.updateItemNoSnapshot);
   const setActivePageIndex = useGridStore((state) => state.setActivePageIndex);
 
   // Local state for inline text editing
@@ -699,17 +700,7 @@ export default function PageCanvas2D({ pageIndex, page, showGridLines }: PageCan
                         autoFocus
                         onBlur={() => setEditingTextId(null)}
                         onChange={(e) => {
-                          useGridStore.setState((state) => {
-                            const updatedPages = state.pages.map((p, idx) => {
-                              if (idx !== pageIndex) return p;
-                              const updatedItems = p.items.map((it) => {
-                                if (it.id !== item.id) return it;
-                                return { ...it, content: e.target.value };
-                              });
-                              return { ...p, items: updatedItems };
-                            });
-                            return { pages: updatedPages };
-                          });
+                          updateItemNoSnapshot(pageIndex, item.id, { content: e.target.value });
                         }}
                         style={{
                           fontSize: `${(item.fontSize || 0.028) * 450}px`,

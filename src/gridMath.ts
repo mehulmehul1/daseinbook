@@ -119,3 +119,23 @@ export function getGridAreaFromCoords(
     rowEnd,
   };
 }
+
+/**
+ * Validates that a GridArea falls within the bounds of a page grid.
+ * Returns true when all coordinates are within [1, columns] and [1, rows]
+ * and colStart <= colEnd, rowStart <= rowEnd.
+ */
+export function isWithinPageBounds(
+  gridArea: GridArea,
+  columns: number,
+  rows: number
+): boolean {
+  const { colStart, colEnd, rowStart, rowEnd } = gridArea;
+  if (colStart < 1 || colStart > columns) return false;
+  if (colEnd < 1 || colEnd > columns) return false;
+  if (rowStart < 1 || rowStart > rows) return false;
+  if (rowEnd < 1 || rowEnd > rows) return false;
+  if (colStart > colEnd) return false;
+  if (rowStart > rowEnd) return false;
+  return true;
+}

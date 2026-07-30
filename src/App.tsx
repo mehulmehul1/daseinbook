@@ -1,12 +1,13 @@
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useGridStore } from './useGridStore';
-import { savePageLayout, fetchLocalAssets, LocalAsset } from './MockGitAPI';
+import { savePageLayout, fetchLocalAssets, saveProjectToLocal, loadProjectFromLocal, exportToBlob, parseImport, LocalAsset } from './MockGitAPI';
 import PaperFlipbook from './PaperFlipbook';
 import PageCanvas2D from './PageCanvas2D';
-import { Plus, Trash2, Check, ArrowRight, Layout, Moon, Sun, Save, Eye, FolderOpen, Grid, RefreshCw, Compass, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
+import SpreadRenderer from './SpreadRenderer';
+import { Plus, Trash2, Check, ArrowRight, Layout, Save, Eye, FolderOpen, Grid, RefreshCw, Compass, Undo2, Redo2, Download, Upload, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react';
 
 export default function App() {
   // Zustand State hooks
@@ -21,6 +22,13 @@ export default function App() {
   const addItemToPage = useGridStore((state) => state.addItemToPage);
   const deleteItem = useGridStore((state) => state.deleteItem);
   const addNewPage = useGridStore((state) => state.addNewPage);
+  const setPageItems = useGridStore((state) => state.setPageItems);
+  const updateItemProperty = useGridStore((state) => state.updateItemProperty);
+  const undo = useGridStore((state) => state.undo);
+  const redo = useGridStore((state) => state.redo);
+  const exportProject = useGridStore((state) => state.exportProject);
+  const importProject = useGridStore((state) => state.importProject);
+  const docStore = useGridStore((state) => state.document);
 
   // Local state for assets, notifications, and git actions
   const [drawerAssets, setDrawerAssets] = useState<LocalAsset[]>([]);
@@ -38,8 +46,39 @@ export default function App() {
   const [show3DPreview, setShow3DPreview] = useState(false);
 
   // Active spread mapping
-  const currentSpread = Math.floor((activePageIndex + 1) / 2);
   const activePage = pages[activePageIndex];
+
+  // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Shift+Z redo
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        if (e.shiftKey) { redo(); } else { undo(); }
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [undo, redo]);
+
+  // Auto-save project to localStorage on document change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try { saveProjectToLocal(exportProject()); } catch {}
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [docStore, exportProject]);
+
+  // Restore project from localStorage on mount
+  useEffect(() => {
+    const saved = loadProjectFromLocal();
+    if (saved) {
+      const result = importProject(saved);
+      if (result.success) {
+        console.log('Project restored from localStorage');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Fetch local assets when active page changes
   useEffect(() => {
@@ -120,73 +159,96 @@ export default function App() {
   const handleAutoGenerateLayout = () => {
     if (!activePage) return;
 
-    useGridStore.setState((state) => {
-      const updatedPages = state.pages.map((p, pIdx) => {
-        if (pIdx !== activePageIndex) return p;
+    const colMax = activePage.gridSettings.columns;
+    const rowMax = activePage.gridSettings.rows;
 
-        const colMax = p.gridSettings.columns;
-        const rowMax = p.gridSettings.rows;
+    const newItems = [
+      {
+        type: 'text' as const,
+        src: 'headline',
+        content: 'GRID & FORM',
+        gridArea: { colStart: 1, colEnd: Math.min(colMax, 3), rowStart: 1, rowEnd: 1 },
+        fontSize: 0.055,
+        color: '#111111',
+      },
+      {
+        type: 'image' as const,
+        src: activePage.assets[0] || 'https://images.unsplash.com/photo-1541824894926-3c58ec3ce706?auto=format&fit=crop&w=800&q=80',
+        gridArea: {
+          colStart: Math.min(colMax, 2),
+          colEnd: colMax,
+          rowStart: 2,
+          rowEnd: Math.min(rowMax, 3)
+        },
+      },
+      {
+        type: 'text' as const,
+        src: 'body',
+        content: 'The typography system conforms tightly to the underlying division of column compartments, aligning design to absolute structural order.',
+        gridArea: {
+          colStart: 1,
+          colEnd: Math.min(colMax, colMax > 3 ? 2 : 1),
+          rowStart: Math.min(rowMax, 4),
+          rowEnd: Math.min(rowMax, 4)
+        },
+        fontSize: 0.026,
+        color: '#444444',
+      }
+    ] as const;
 
-        const newItems = [
-          {
-            id: `title-${Date.now()}`,
-            type: 'text' as const,
-            src: 'headline',
-            content: 'GRID & FORM',
-            gridArea: { colStart: 1, colEnd: Math.min(colMax, 3), rowStart: 1, rowEnd: 1 },
-            fontSize: 0.055,
-            color: '#111111',
-          },
-          {
-            id: `img-${Date.now() + 1}`,
-            type: 'image' as const,
-            src: p.assets[0] || 'https://images.unsplash.com/photo-1541824894926-3c58ec3ce706?auto=format&fit=crop&w=800&q=80',
-            gridArea: {
-              colStart: Math.min(colMax, 2),
-              colEnd: colMax,
-              rowStart: 2,
-              rowEnd: Math.min(rowMax, 3)
-            },
-          },
-          {
-            id: `para-${Date.now() + 2}`,
-            type: 'text' as const,
-            src: 'body',
-            content: 'The typography system conforms tightly to the underlying division of column compartments, aligning design to absolute structural order.',
-            gridArea: {
-              colStart: 1,
-              colEnd: Math.min(colMax, colMax > 3 ? 2 : 1),
-              rowStart: Math.min(rowMax, 4),
-              rowEnd: Math.min(rowMax, 4)
-            },
-            fontSize: 0.026,
-            color: '#444444',
-          }
-        ];
-        return { ...p, items: newItems };
-      });
-      return { pages: updatedPages };
-    });
-
+    setPageItems(activePageIndex, newItems as any);
     triggerToast('Suggested a classic Swiss composition.', 'success');
   };
 
   const selectedItem = activePage?.items.find((item) => item.id === selectedItemId);
 
-  const updateSelectedItemProperty = (key: string, value: any) => {
-    if (!selectedItem) return;
-    useGridStore.setState((state) => {
-      const updatedPages = state.pages.map((p, pIdx) => {
-        if (pIdx !== activePageIndex) return p;
-        const updatedItems = p.items.map((it) => {
-          if (it.id !== selectedItem.id) return it;
-          return { ...it, [key]: value };
-        });
-        return { ...p, items: updatedItems };
-      });
-      return { pages: updatedPages };
-    });
+  const updateSelectedItemProperty = useCallback((key: string, value: any) => {
+    if (!selectedItem || !activePage) return;
+    updateItemProperty(activePageIndex, selectedItem.id, key, value);
+  }, [selectedItem, activePage, activePageIndex, updateItemProperty]);
+
+  // Export/Import handlers
+  const handleExport = () => {
+    const file = exportProject();
+    const blob = exportToBlob(file);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dasein-project-${Date.now()}.dasein`;
+    a.click();
+    URL.revokeObjectURL(url);
+    saveProjectToLocal(file);
+    triggerToast('Project exported as .dasein file', 'success');
   };
+
+  const handleImport = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.dasein,application/json';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const parsed = parseImport(text);
+        if (!parsed) { triggerToast('Invalid .dasein file', 'error'); return; }
+        const result = importProject(parsed);
+        if (result.success) {
+          triggerToast('Project imported successfully', 'success');
+        } else {
+          triggerToast(result.error || 'Import failed', 'error');
+        }
+      } catch {
+        triggerToast('Failed to read file', 'error');
+      }
+    };
+    input.click();
+  };
+
+  // Compute spread data for current view
+  const currentSpread = Math.floor((activePageIndex + 1) / 2);
+  const spreads = useGridStore((state) => state.document.spreads);
+  const spreadData = spreads[currentSpread];
 
   return (
     <div className="h-screen overflow-hidden bg-[#f3f2ef] text-[#1a1a1a] flex flex-col font-sans selection:bg-[#ff4d4d] selection:text-white">
@@ -251,6 +313,46 @@ export default function App() {
             <Compass size={13} className={show3DPreview ? 'animate-spin' : ''} />
             {show3DPreview ? 'Studio Editor (2D)' : 'View in 3D'}
           </button>
+
+          {/* Undo/Redo */}
+          {isEditMode && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={undo}
+                className="p-1.5 hover:bg-[#f3f2ef] text-[#555555] hover:text-black border border-transparent hover:border-[#dfdedb] transition rounded"
+                title="Undo (Ctrl+Z)"
+              >
+                <Undo2 size={14} />
+              </button>
+              <button
+                onClick={redo}
+                className="p-1.5 hover:bg-[#f3f2ef] text-[#555555] hover:text-black border border-transparent hover:border-[#dfdedb] transition rounded"
+                title="Redo (Ctrl+Shift+Z)"
+              >
+                <Redo2 size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* Export/Import */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold uppercase bg-white border border-[#dfdedb] text-[#555555] hover:border-[#1a1a1a] hover:text-black transition"
+              title="Export .dasein project file"
+            >
+              <Download size={13} />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+            <button
+              onClick={handleImport}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold uppercase bg-white border border-[#dfdedb] text-[#555555] hover:border-[#1a1a1a] hover:text-black transition"
+              title="Import .dasein project file"
+            >
+              <Upload size={13} />
+              <span className="hidden sm:inline">Import</span>
+            </button>
+          </div>
 
           <div className="h-4 w-[1px] bg-[#dfdedb]"></div>
 
@@ -655,7 +757,7 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                /* DUAL PAGES SIDE-BY-SIDE (OPENED BOOK SPREAD) */
+                /* DUAL PAGES SIDE-BY-SIDE (OPENED BOOK SPREAD) via SpreadRenderer */
                 <div className="flex flex-col items-center gap-3 w-full">
                   <div className="flex justify-between w-full max-w-4xl px-2 text-[10px] font-bold text-[#777777] uppercase tracking-wider">
                     <span>Left Page (Page {currentSpread * 2 - 1})</span>
@@ -663,47 +765,48 @@ export default function App() {
                     <span>Right Page (Page {currentSpread * 2})</span>
                   </div>
 
-                  {/* Joined double spread container with middle crease */}
-                  <div className="flex w-full max-w-4xl shadow-2xl relative bg-white border border-[#dfdedb]">
-                    {/* Page 1 (Left Page) */}
-                    <div className="w-1/2 border-r border-[#e3e2de] relative">
-                      {pages[currentSpread * 2 - 1] ? (
-                        <PageCanvas2D
-                          pageIndex={currentSpread * 2 - 1}
-                          page={pages[currentSpread * 2 - 1]}
-                          showGridLines={showGridLines}
-                        />
-                      ) : (
-                        <div className="aspect-[1.4/2] bg-[#fdfcfb] flex items-center justify-center p-8 text-center text-xs text-[#999999]">
-                          Page empty or uninstantiated. Click "Next" to continue.
-                        </div>
-                      )}
-                      
-                      {/* Subtle shading simulating the inner gutter of the left page */}
-                      <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-r from-transparent to-black/[0.04] pointer-events-none" />
+                  {spreadData ? (
+                    <SpreadRenderer
+                      spread={spreadData}
+                      leftPage={pages[currentSpread * 2 - 1]}
+                      rightPage={pages[currentSpread * 2]}
+                      activePageIndex={activePageIndex}
+                      onPageClick={(idx) => { setActivePageIndex(idx); setSelectedItemId(null); }}
+                      showGridLines={showGridLines}
+                    />
+                  ) : (
+                    <div className="flex w-full max-w-4xl shadow-2xl relative bg-white border border-[#dfdedb]">
+                      <div className="w-1/2 border-r border-[#e3e2de] relative">
+                        {pages[currentSpread * 2 - 1] ? (
+                          <PageCanvas2D
+                            pageIndex={currentSpread * 2 - 1}
+                            page={pages[currentSpread * 2 - 1]}
+                            showGridLines={showGridLines}
+                          />
+                        ) : (
+                          <div className="aspect-[1.4/2] bg-[#fdfcfb] flex items-center justify-center p-8 text-center text-xs text-[#999999]">
+                            Page empty or uninstantiated. Click "Next" to continue.
+                          </div>
+                        )}
+                        <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-r from-transparent to-black/[0.04] pointer-events-none" />
+                      </div>
+                      <div className="w-1/2 relative">
+                        {pages[currentSpread * 2] ? (
+                          <PageCanvas2D
+                            pageIndex={currentSpread * 2}
+                            page={pages[currentSpread * 2]}
+                            showGridLines={showGridLines}
+                          />
+                        ) : (
+                          <div className="aspect-[1.4/2] bg-[#fdfcfb] flex items-center justify-center p-8 text-center text-xs text-[#999999] border-l border-[#dfdedb]">
+                            Page empty or uninstantiated. Click "Next" to continue.
+                          </div>
+                        )}
+                        <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-l from-transparent to-black/[0.04] pointer-events-none" />
+                      </div>
+                      <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[2px] bg-[#dfdedb] shadow-inner pointer-events-none z-10" />
                     </div>
-
-                    {/* Page 2 (Right Page) */}
-                    <div className="w-1/2 relative">
-                      {pages[currentSpread * 2] ? (
-                        <PageCanvas2D
-                          pageIndex={currentSpread * 2}
-                          page={pages[currentSpread * 2]}
-                          showGridLines={showGridLines}
-                        />
-                      ) : (
-                        <div className="aspect-[1.4/2] bg-[#fdfcfb] flex items-center justify-center p-8 text-center text-xs text-[#999999] border-l border-[#dfdedb]">
-                          Page empty or uninstantiated. Click "Next" to continue.
-                        </div>
-                      )}
-
-                      {/* Subtle shading simulating the inner gutter of the right page */}
-                      <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-l from-transparent to-black/[0.04] pointer-events-none" />
-                    </div>
-
-                    {/* Highly tactile absolute center line representing the spine book spine */}
-                    <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[2px] bg-[#dfdedb] shadow-inner pointer-events-none z-10" />
-                  </div>
+                  )}
                 </div>
               )}
             </div>
